@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Jungle Munch — Tropical Maze</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Nunito:wght@700;800;900&display=swap');
+    :root { --lime:#c7ff52; --leaf:#073d28; --sun:#ffd95a; }
+    * { box-sizing:border-box } body { margin:0; min-height:100vh; display:grid; place-items:center; overflow:hidden; color:#f6ffe9; font-family:Nunito,system-ui,sans-serif; background:#042719 url('jungle-bg.png') center/cover fixed; }
+    body::before { content:""; position:fixed; inset:0; background:radial-gradient(circle at 50% 45%,transparent 8%,rgba(0,22,14,.56) 86%); pointer-events:none; }
+    .shell { position:relative; width:min(94vw,780px); padding:20px 20px 16px; border:1px solid rgba(210,255,140,.32); border-radius:26px; background:linear-gradient(135deg,rgba(4,43,28,.91),rgba(0,25,17,.8)); box-shadow:0 25px 70px #00170d; backdrop-filter:blur(8px); }
+    header { display:flex; align-items:center; justify-content:space-between; gap:12px; margin:0 4px 14px; }
+    h1 { font-family:'Black Han Sans',sans-serif; font-weight:400; letter-spacing:.02em; font-size:clamp(1.35rem,4vw,2.2rem); margin:0; color:var(--lime); text-shadow:0 3px 0 #0c582d; }
+    .stats { display:flex; gap:10px; } .stat { min-width:84px; padding:6px 10px; border-radius:11px; text-align:center; font-size:.76rem; font-weight:900; letter-spacing:.08em; color:#d2ebba; background:rgba(191,255,81,.1); }
+    .stat b { display:block; color:#fff7b5; font-size:1.15rem; letter-spacing:0; line-height:1.2; }
+    .game-wrap { position:relative; width:min(100%,calc(74vh * .903)); margin:auto; aspect-ratio:28/31; overflow:hidden; border:3px solid #92e45e; border-radius:17px; background:#052b21; box-shadow:inset 0 0 35px #001c12,0 0 25px rgba(167,255,101,.2); }
+    canvas { width:100%; height:100%; display:block; image-rendering:auto; }
+    .screen { position:absolute; inset:0; display:grid; place-items:center; text-align:center; background:rgba(0,37,21,.64); transition:.25s; }
+    .screen.hidden { opacity:0; pointer-events:none; } .card { padding:22px 28px; border:1px solid rgba(255,240,151,.6); border-radius:18px; background:rgba(4,48,30,.92); box-shadow:0 12px 35px #001a0d; }
+    .card h2 { margin:0 0 7px; font:400 1.7rem 'Black Han Sans'; color:#ffe46b; } .card p { margin:0 0 16px; color:#e3f8c9; }
+    button { cursor:pointer; border:0; border-radius:999px; padding:11px 18px; color:#133820; background:linear-gradient(180deg,#f9ee75,#ffbb4d); font:900 .95rem Nunito,sans-serif; box-shadow:0 4px 0 #c77d25; } button:active { transform:translateY(3px); box-shadow:0 1px 0 #c77d25; }
+    .help { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:14px 4px 0; color:#d5ecc3; font-size:.88rem; font-weight:800; } .fruit-key { letter-spacing:.15em; font-size:1.25rem; }
+    .mobile { display:none; grid-template-columns:repeat(3,54px); gap:5px; justify-content:center; margin-top:12px; } .mobile button { padding:8px; border-radius:11px; font-size:1.2rem; } .up { grid-column:2; } .left { grid-column:1; grid-row:2; } .down { grid-column:2; grid-row:2; } .right { grid-column:3; grid-row:2; }
+    @media(max-width:560px) { .shell{padding:13px;border-radius:18px}.stat{min-width:66px;padding:5px 7px}.help{font-size:.74rem}.mobile{display:grid} }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header><h1>🌿 JUNGLE MUNCH</h1><div class="stats"><div class="stat">점수<b id="score">0000</b></div><div class="stat">남은 과일<b id="left">00</b></div><div class="stat">기록<b id="timer">00:00</b></div></div></header>
+    <section class="game-wrap" aria-label="열대과일 미로 게임"><canvas id="game" width="840" height="930" tabindex="0"></canvas><div class="screen" id="screen"><div class="card"><h2 id="message">열대 과일 수확!</h2><p id="submessage">방향키로 정글 탐험을 시작하세요</p><button id="start">게임 시작</button></div></div></section>
+    <div class="help"><span>방향키 / WASD로 이동</span><span class="fruit-key">🍌 🥭 🍍 🍉</span><button id="restart">다시 하기</button></div>
+    <div class="mobile" aria-label="터치 방향키"><button class="up" data-d="up">▲</button><button class="left" data-d="left">◀</button><button class="down" data-d="down">▼</button><button class="right" data-d="right">▶</button></div>
+  </main>
+<script>
+const canvas=document.querySelector('#game'), ctx=canvas.getContext('2d');
+const scoreEl=document.querySelector('#score'), leftEl=document.querySelector('#left'), timerEl=document.querySelector('#timer');
+const screenEl=document.querySelector('#screen'), messageEl=document.querySelector('#message');
+const submessageEl=document.querySelector('#submessage'), startButton=document.querySelector('#start');
+const W=28,H=31,S=30; // classic Pac-Man maze proportions
+const map=[
+ '############################','#............##............#','#.####.#####.##.#####.####.#','#o####.#####.##.#####.####o#','#.####.#####.##.#####.####.#','#..........................#','#.####.##.########.##.####.#','#.####.##.########.##.####.#','#......##....##....##......#','######.#####.##.#####.######','     #.#####.##.#####.#     ','     #.##..........##.#     ','     #.##.###..###.##.#     ','######.##.#........#..#.####','      .   #...GG...#   .    ','######.##.#........#..#.####','     #.##.########.##.#     ','     #.##..........##.#     ','     #.##.########.##.#     ','######.##.########.##.######','#............##............#','#.####.#####.##.#####.####.#','#.####.#####.##.#####.####.#','#o..##................##..o#','###.##.##.########.##.##.###','###.##.##.########.##.##.###','#......##....##....##......#','#.##########.##.##########.#','#.##########.##.##########.#','#..........................#','############################'];
+let grid=[], player, ghosts, score, running=false, fruitsLeft=0, tick=0, startTime=0, elapsed=0, lastRouteAt=0, ghostMoveProgress=0;
+let heldDirections=new Set(), heldOrder=[], tapDirection=null;
+const dirs={up:{x:0,y:-1},down:{x:0,y:1},left:{x:-1,y:0},right:{x:1,y:0}};
+const fruit=['🍌','🥭','🍍','🍉','🍊'];
+function init(){ grid=map.map(r=>r.split('')); score=0; tick=0; elapsed=0; ghostMoveProgress=0; fruitsLeft=0; ghosts=[];const guardianColors=['#fa5b75','#55dff2'];grid.forEach((r,y)=>r.forEach((v,x)=>{if(v=='.'||v=='o')fruitsLeft++;if(v=='G')ghosts.push({x,y,dx:0,dy:-1,color:guardianColors[ghosts.length],route:[]});if(v==' '){} }));player={x:14,y:23,dx:0,dy:0,mouth:0}; updateStats(); updateTimer(); }
+function updateStats(){scoreEl.textContent=String(score).padStart(4,'0');leftEl.textContent=String(fruitsLeft).padStart(2,'0')}
+function updateTimer(){let m=Math.floor(elapsed/60),s=Math.floor(elapsed%60);timerEl.textContent=String(m).padStart(2,'0')+':'+String(s).padStart(2,'0')}
+function walkable(x,y){return grid[y]&&grid[y][x]!== '#' && grid[y][x]!==undefined}
+function nextCell(x,y,d){let nx=x+d.x,ny=y+d.y;if(y===14&&nx<0)nx=W-1;if(y===14&&nx>=W)nx=0;return{x:nx,y:ny}}
+function setDir(d){tapDirection=dirs[d]||null}
+function requestedDirection(){if(tapDirection){let d=tapDirection;tapDirection=null;return d}for(let i=heldOrder.length-1;i>=0;i--){let d=heldOrder[i];if(heldDirections.has(d))return dirs[d]}return null}
+function hasCollision(){return ghosts.some(g=>g.x===player.x&&g.y===player.y)}
+function movePlayer(){let direction=requestedDirection();if(!direction)return;let next=nextCell(player.x,player.y,direction);if(!walkable(next.x,next.y))return;player.dx=direction.x;player.dy=direction.y;player.x=next.x;player.y=next.y;if(hasCollision()){lose();return}let cell=grid[player.y][player.x];if(cell==='.'||cell==='o'){grid[player.y][player.x]=' ';score+=cell==='o'?50:10;fruitsLeft--;updateStats();}if(!fruitsLeft)win();}
+// BFS: every second, the guardian recalculates the real shortest maze route to the player.
+function shortestRoute(from,target,avoid=new Set()){let queue=[{x:from.x,y:from.y,path:[]}],seen=new Set([from.x+','+from.y]);while(queue.length){let node=queue.shift();if(node.x===target.x&&node.y===target.y)return node.path;for(const d of Object.values(dirs)){let next=nextCell(node.x,node.y,d),key=next.x+','+next.y,isTarget=next.x===target.x&&next.y===target.y;if(walkable(next.x,next.y)&&!seen.has(key)&&(!avoid.has(key)||isTarget)){seen.add(key);queue.push({x:next.x,y:next.y,path:node.path.concat(d)})}}}return []}
+function reserveRoute(from,route,reserved){let x=from.x,y=from.y;for(const step of route){let next=nextCell(x,y,step);x=next.x;y=next.y;if(x!==player.x||y!==player.y)reserved.add(x+','+y)}}
+function moveGhosts(){const now=performance.now(),refresh=now-lastRouteAt>=1000,needsRoute=refresh||ghosts.some(g=>!g.route.length);if(refresh)lastRouteAt=now;if(needsRoute){const reserved=new Set();ghosts.forEach((g,index)=>{g.route=shortestRoute(g,player,index?reserved:new Set());if(index&&g.route.length===0)g.route=shortestRoute(g,player);reserveRoute(g,g.route,reserved)})}ghosts.forEach(g=>{if(!running)return;let step=g.route.shift();if(step){let next=nextCell(g.x,g.y,step);g.dx=step.x;g.dy=step.y;g.x=next.x;g.y=next.y}if(hasCollision())lose();});}
+function draw(){ctx.clearRect(0,0,canvas.width,canvas.height);ctx.fillStyle='rgba(0,20,13,.72)';ctx.fillRect(0,0,canvas.width,canvas.height);for(let y=0;y<H;y++)for(let x=0;x<W;x++){let c=grid[y][x],px=x*S,py=y*S;if(c==='#'){ctx.fillStyle='#136d3b';ctx.fillRect(px+2,py+2,S-4,S-4);ctx.strokeStyle='#8edb51';ctx.lineWidth=2;ctx.strokeRect(px+6,py+6,S-12,S-12)}else if(c==='.'||c==='o'){ctx.font=(c==='o'?'22':'16')+'px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(c==='o'?fruit[(x+y)%fruit.length]:fruit[(x*3+y)%fruit.length],px+S/2,py+S/2+1)}}drawCharacter(player.x,player.y,'#f6df4a',true);ghosts.forEach(g=>drawCharacter(g.x,g.y,g.color,false));}
+function drawCharacter(x,y,color,isPlayer){let cx=x*S+S/2,cy=y*S+S/2;if(isPlayer){let a=Math.atan2(player.dy,player.dx)||0,open=.25+Math.abs(Math.sin(tick*.18))*.25;ctx.beginPath();ctx.moveTo(cx,cy);ctx.arc(cx,cy,11,a+open,a+Math.PI*2-open);ctx.closePath();ctx.fillStyle=color;ctx.fill();ctx.fillStyle='#264421';ctx.beginPath();ctx.arc(cx+4,cy-5,2,0,Math.PI*2);ctx.fill()}else{ctx.fillStyle=color;ctx.beginPath();ctx.arc(cx,cy-2,10,Math.PI,0);ctx.lineTo(cx+10,cy+10);ctx.lineTo(cx+5,cy+6);ctx.lineTo(cx,cy+10);ctx.lineTo(cx-5,cy+6);ctx.lineTo(cx-10,cy+10);ctx.closePath();ctx.fill();ctx.fillStyle='white';ctx.beginPath();ctx.arc(cx-4,cy-2,3,0,7);ctx.arc(cx+4,cy-2,3,0,7);ctx.fill();ctx.fillStyle='#173d30';ctx.beginPath();ctx.arc(cx-3,cy-2,1.4,0,7);ctx.arc(cx+5,cy-2,1.4,0,7);ctx.fill()}}
+function loop(){if(!running)return;tick++;elapsed=(performance.now()-startTime)/1000;updateTimer();if(tick%7===0)movePlayer();ghostMoveProgress+=.07;if(running&&ghostMoveProgress>=1){ghostMoveProgress-=1;moveGhosts()}draw();requestAnimationFrame(loop)}
+function begin(){heldDirections.clear();heldOrder=[];tapDirection=null;init();startTime=performance.now();lastRouteAt=startTime;running=true;screenEl.classList.add('hidden');canvas.focus({preventScroll:true});draw();loop()} function win(){elapsed=(performance.now()-startTime)/1000;updateTimer();running=false;show('정글 정복! 🌺',`클리어 기록: ${timerEl.textContent}`)} function lose(){running=false;show('앗, 정글 수호자!',`생존 기록: ${timerEl.textContent}`)} function show(a,b){messageEl.textContent=a;submessageEl.textContent=b;startButton.textContent='다시 시작';screenEl.classList.remove('hidden')}
+const keyToDirection={ArrowUp:'up',ArrowDown:'down',ArrowLeft:'left',ArrowRight:'right',w:'up',s:'down',a:'left',d:'right',KeyW:'up',KeyS:'down',KeyA:'left',KeyD:'right'};
+function directionFromEvent(e){return keyToDirection[e.key]||keyToDirection[e.code]}
+window.addEventListener('keydown',e=>{let k=directionFromEvent(e);if(k){e.preventDefault();tapDirection=dirs[k];heldDirections.add(k);heldOrder=heldOrder.filter(d=>d!==k);heldOrder.push(k)}},{capture:true});window.addEventListener('keyup',e=>{let k=directionFromEvent(e);if(k){heldDirections.delete(k);heldOrder=heldOrder.filter(d=>d!==k)}},{capture:true});window.addEventListener('blur',()=>{heldDirections.clear();heldOrder=[];tapDirection=null});document.querySelectorAll('[data-d]').forEach(b=>b.addEventListener('pointerdown',()=>setDir(b.dataset.d)));startButton.onclick=begin;document.querySelector('#restart').onclick=begin;init();draw();
+</script>
+</body></html>
